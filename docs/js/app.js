@@ -683,7 +683,7 @@ const ACCIONES = {
     try { await S.backend.entrarConGoogle(); }
     catch (e) {
       if (e && e.code === "auth/popup-closed-by-user") return;
-      S.error = "No fue posible iniciar sesión con Google. Inténtelo de nuevo.";
+      S.error = `No fue posible iniciar sesión con Google. Código: ${(e && (e.code || e.message)) || "desconocido"}`;
       console.error(e); render();
     }
   },
