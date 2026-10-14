@@ -608,6 +608,12 @@ function render() {
   if (S.usuario === undefined) return vistaPreparando("Abriendo…");
   if (S.usuario === null) return vistaEntrar();
   const d = S.datos;
+  if (d && d.sinPermiso) {
+    return pantallaAcceso(`<h1>Cuenta sin acceso</h1>
+      <p>La cuenta <strong>${esc(S.usuario.email)}</strong> no está autorizada para usar esta aplicación.</p>
+      <p>Cierre la sesión y vuelva a entrar eligiendo la cuenta autorizada.</p>
+      <button class="btn btn-primario btn-ancho" data-accion="salir-cuenta">Cerrar sesión y elegir otra cuenta</button>`);
+  }
   if (!d || !d.cargado) {
     if (!S.online && !(d && d.seguridad)) return pantallaAcceso(`<h1>Sin conexión</h1><p>Este dispositivo aún no tiene la información descargada. Conéctese a internet para prepararlo por primera vez.</p>`);
     return vistaPreparando("Cargando la información…");
@@ -687,6 +693,7 @@ const ACCIONES = {
       console.error(e); render();
     }
   },
+  async "salir-cuenta"() { ses.del("cmm_desbloqueado"); await S.backend.salir(); },
   "cancelar-recuperacion"() { ses.del("cmm_recuperar"); render(); },
   async "olvide-pin"() {
     if (!S.online) return aviso("Para recuperar el acceso necesita conexión a internet, ya que deberá identificarse con su cuenta de Google.");

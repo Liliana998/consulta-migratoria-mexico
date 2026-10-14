@@ -67,26 +67,30 @@ export async function crearBackend() {
         desdeCache: estado.desdeCache
       });
       const opts = { includeMetadataChanges: true };
+      const fallo = (donde) => (err) => {
+        console.error(donde, err);
+        if (err && err.code === "permission-denied") cb({ sinPermiso: true });
+      };
       const bajas = COLECCIONES.map((nombre) =>
         fs.onSnapshot(col(nombre), opts, (snap) => {
           estado[nombre] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
           estado.recibidos.add(nombre);
           estado.desdeCache = snap.metadata.fromCache;
           emitir();
-        }, (err) => console.error(nombre, err))
+        }, fallo(nombre))
       );
       bajas.push(fs.onSnapshot(ref("config", "seguridad"), opts, (snap) => {
         estado.seguridad = snap.exists() ? snap.data() : null;
         estado.seguridadConfirmada = snap.exists() || !snap.metadata.fromCache;
         estado.recibidos.add("seguridad");
         emitir();
-      }, (err) => console.error("seguridad", err)));
+      }, fallo("seguridad")));
       bajas.push(fs.onSnapshot(ref("config", "app"), opts, (snap) => {
         estado.app = snap.exists() ? snap.data() : null;
         estado.appConfirmada = snap.exists() || !snap.metadata.fromCache;
         estado.recibidos.add("app");
         emitir();
-      }, (err) => console.error("app", err)));
+      }, fallo("app")));
       return () => bajas.forEach((b) => b());
     },
 
