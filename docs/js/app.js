@@ -581,7 +581,7 @@ function vistaAjustes() {
         <button class="btn" data-accion="importar" ${S.online ? "" : "disabled"}>Restaurar un respaldo</button>
       </div>
       ${S.online ? "" : `<p class="nota">La restauración requiere conexión a internet.</p>`}
-      <input type="file" accept="application/json,.json" id="archivo-respaldo" hidden>
+      <input type="file" id="archivo-respaldo" hidden>
     </section>
     <section class="bloque">
       <h2>Borradores de contenido jurídico</h2>
