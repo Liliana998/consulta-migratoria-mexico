@@ -41,6 +41,8 @@ const fmtImporte = (v, moneda = "MXN") => {
   try { return new Intl.NumberFormat("es-MX", { style: "currency", currency: moneda || "MXN" }).format(v); }
   catch { return `${Number(v).toLocaleString("es-MX", { minimumFractionDigits: 2 })} ${moneda}`; }
 };
+// Convierte en enlaces las direcciones http(s) dentro de un texto (el resto se escapa).
+const conEnlaces = (t) => esc(t).replace(/https?:\/\/[^\s<]+/g, (u) => `<a href="${u}" target="_blank" rel="noopener">abrir fuente</a>`);
 const enlaceSeguro = (u) => /^https?:\/\//i.test(String(u || "").trim()) ? String(u).trim() : null;
 
 const tramites = () => [...(S.datos?.tramites || [])].sort(porOrden);
@@ -478,7 +480,7 @@ function vistaSupuesto(id, pestana = "preguntas") {
       <dl class="caratula-datos">
         <div><dt>Estado de revisión</dt><dd>${insigniaRevision(s)}</dd></div>
         <div><dt>Última verificación</dt><dd>${v.tipo === "nunca" ? `<span class="insignia pendiente">Pendiente de verificar</span>` : esc(fmtFecha(s.fechaVerificacion))}</dd></div>
-        <div class="dd-ancho"><dt>Fuentes oficiales principales</dt><dd>${fuentes.length ? `<ul class="fuentes">${fuentes.map((f) => `<li>${enlaceSeguro(f) ? `<a href="${esc(f)}" target="_blank" rel="noopener">${esc(f)}</a>` : esc(f)}</li>`).join("")}</ul>` : `<span class="tenue">Sin registrar</span>`}</dd></div>
+        <div class="dd-ancho"><dt>Fuentes oficiales principales</dt><dd>${fuentes.length ? `<ul class="fuentes">${fuentes.map((f) => `<li>${conEnlaces(f)}</li>`).join("")}</ul>` : `<span class="tenue">Sin registrar</span>`}</dd></div>
       </dl>
       ${v.tipo === "revisar" ? `<p class="aviso-vigencia">Han transcurrido más de seis meses desde la última verificación. Conviene revisar la vigencia de esta información.</p>` : ""}
       ${ed ? `<div class="caratula-acciones">
@@ -580,6 +582,13 @@ function vistaAjustes() {
       </div>
       ${S.online ? "" : `<p class="nota">La restauración requiere conexión a internet.</p>`}
       <input type="file" accept="application/json,.json" id="archivo-respaldo" hidden>
+    </section>
+    <section class="bloque">
+      <h2>Borradores de contenido jurídico</h2>
+      <p>Agregue los borradores preparados para su revisión. Solo se añaden trámites y supuestos nuevos: lo que ya existe en la aplicación, incluido lo aprobado y sus honorarios, no se modifica.</p>
+      <div class="botones">
+        <button class="btn" data-accion="importar-borradores" ${S.online ? "" : "disabled"}>Importar borradores</button>
+      </div>
     </section>
     <section class="bloque">
       <h2>Acceso</h2>
@@ -866,6 +875,56 @@ const ACCIONES = {
     a.download = `respaldo-consulta-migratoria-${fecha}.json`;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  },
+
+  "importar-borradores"() {
+    const input = document.getElementById("archivo-respaldo");
+    input.value = "";
+    input.onchange = async () => {
+      const f = input.files[0];
+      if (!f) return;
+      if (f.size > 5 * 1024 * 1024) return aviso("El archivo es demasiado grande.", "Archivo no válido");
+      let obj;
+      try { obj = JSON.parse(await f.text()); }
+      catch { return aviso("El archivo no tiene formato JSON válido. No se ha modificado ninguna información.", "Archivo no válido"); }
+      const r = validarRespaldo(obj);
+      if (!r.ok) return aviso(`El archivo no supera la validación y <strong>no se ha modificado ninguna información</strong>:<ul>${r.errores.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`, "Borradores no válidos");
+      const n = r.datos;
+      const idsT = new Set(S.datos.tramites.map((x) => x.id));
+      const idsS = new Set(S.datos.supuestos.map((x) => x.id));
+      const nuevosT = n.tramites.filter((t) => !idsT.has(t.id));
+      const nuevosS = n.supuestos.filter((s) => !idsS.has(s.id));
+      const omitidos = (n.tramites.length - nuevosT.length) + (n.supuestos.length - nuevosS.length);
+      if (!nuevosT.length && !nuevosS.length) return aviso("Todo el contenido de este archivo ya existe en la aplicación. No se ha modificado nada.", "Sin novedades");
+      const ok = await confirmar(`
+        <p>Se agregarán <strong>${nuevosT.length} ${nuevosT.length === 1 ? "trámite" : "trámites"}</strong> y <strong>${nuevosS.length} ${nuevosS.length === 1 ? "supuesto" : "supuestos"}</strong>, todos con el estado «Borrador pendiente de aprobación».</p>
+        ${nuevosS.length ? `<ul>${nuevosS.map((s) => `<li>${esc(s.nombre)}</li>`).join("")}</ul>` : ""}
+        ${omitidos ? `<p>${omitidos} ${omitidos === 1 ? "elemento ya existe y se deja" : "elementos ya existen y se dejan"} sin cambios.</p>` : ""}
+        <p>No se elimina ni se sustituye nada de lo que ya tiene.</p>`,
+        { boton: "Agregar borradores", titulo: "Importar borradores" });
+      if (!ok) return;
+      if (!S.online) return aviso("Se perdió la conexión. No se ha modificado ninguna información.");
+      const espera = dialogo(`<div class="dlg-cuerpo"><p>Agregando borradores…</p><div class="cargando"></div></div>`);
+      espera.dataset.ocupado = "1";
+      let agregados = 0, saltados = 0;
+      try {
+        for (const t of nuevosT) {
+          try { await S.backend.guardar("tramites", t.id, t, null); agregados++; }
+          catch (e) { if (e.code === "conflicto") saltados++; else throw e; }
+        }
+        for (const s of nuevosS) {
+          try { await S.backend.guardar("supuestos", s.id, { ...s, estadoRevision: "borrador" }, null); agregados++; }
+          catch (e) { if (e.code === "conflicto") saltados++; else throw e; }
+        }
+        delete espera.dataset.ocupado; espera.close();
+        await aviso(`Se agregaron ${agregados} elementos.${saltados ? ` ${saltados} ya existían y no se modificaron.` : ""}`, "Borradores agregados");
+      } catch (e) {
+        delete espera.dataset.ocupado; espera.close();
+        console.error(e);
+        await aviso(`La importación se interrumpió después de agregar ${agregados} elementos. Puede volver a importar el mismo archivo: lo ya agregado no se duplicará.`, "Importación incompleta");
+      }
+    };
+    input.click();
   },
 
   importar() {

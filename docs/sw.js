@@ -1,6 +1,6 @@
 // Service worker: guarda la aplicación en el dispositivo para que abra sin conexión.
 // Los datos NO se guardan aquí: los conserva la copia local de Firestore.
-const VERSION = "cmm-v3";
+const VERSION = "cmm-v4";
 const SDK = "https://www.gstatic.com/firebasejs/10.14.1";
 const LOCALES = [
   "./", "index.html", "manifest.webmanifest", "css/app.css",
