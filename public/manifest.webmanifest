@@ -1,0 +1,17 @@
+{
+  "name": "Consulta Migratoria México",
+  "short_name": "Consulta Migratoria",
+  "description": "Biblioteca profesional de consulta de trámites migratorios y honorarios.",
+  "lang": "es-MX",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#F6F8FA",
+  "theme_color": "#1F4E6E",
+  "icons": [
+    { "src": "icons/icono-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icono-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

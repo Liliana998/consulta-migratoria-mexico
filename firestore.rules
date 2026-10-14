@@ -1,0 +1,21 @@
+rules_version = '2';
+// Reglas de seguridad de la base de datos de Consulta Migratoria.
+// Solo la cuenta de Google autorizada puede leer o escribir, y únicamente dentro de su propio espacio.
+// Nadie más puede ver ni modificar la información, aunque conozca la dirección de la aplicación o el PIN.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function esLaTitular(uid) {
+      return request.auth != null
+        && request.auth.uid == uid
+        && request.auth.token.email_verified == true
+        && request.auth.token.email == "CORREO_AUTORIZADO";
+    }
+    match /usuarios/{uid}/{documento=**} {
+      allow read, write: if esLaTitular(uid);
+    }
+    // Cualquier otra ruta queda cerrada.
+    match /{otra=**} {
+      allow read, write: if false;
+    }
+  }
+}

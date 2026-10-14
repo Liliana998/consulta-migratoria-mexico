@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1F4E6E">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Consulta Migratoria</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icono-192.png">
+  <link rel="apple-touch-icon" href="icons/icono-192.png">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div id="app" aria-live="polite"></div>
+  <noscript>Esta aplicación necesita JavaScript.</noscript>
+  <script type="module">
+    import { iniciar } from "./js/app.js";
+    import { crearBackend, firebaseConfigurado } from "./js/backend-firebase.js";
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js").catch((e) => console.error("SW", e));
+    }
+    if (!firebaseConfigurado()) {
+      document.getElementById("app").innerHTML =
+        '<main class="acceso"><div class="acceso-caja"><p class="acceso-marca">Consulta Migratoria</p>' +
+        '<h1>Configuración pendiente</h1><p>La aplicación todavía no está vinculada a su proyecto de Firebase. ' +
+        'Este paso se completa una sola vez durante la instalación.</p></div></main>';
+    } else {
+      iniciar(crearBackend);
+    }
+  </script>
+</body>
+</html>
