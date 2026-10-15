@@ -587,7 +587,8 @@ function vistaAjustes() {
       <h2>Borradores de contenido jurídico</h2>
       <p>Agregue los borradores preparados para su revisión. Solo se añaden trámites y supuestos nuevos: lo que ya existe en la aplicación, incluido lo aprobado y sus honorarios, no se modifica.</p>
       <div class="botones">
-        <button class="btn" data-accion="importar-borradores" ${S.online ? "" : "disabled"}>Importar borradores</button>
+        <button class="btn" data-accion="importar-borradores" ${S.online ? "" : "disabled"}>Importar borradores (archivo)</button>
+        <button class="btn" data-accion="pegar-borradores" ${S.online ? "" : "disabled"}>Pegar borradores (texto)</button>
       </div>
     </section>
     <section class="bloque">
@@ -887,44 +888,24 @@ const ACCIONES = {
       let obj;
       try { obj = JSON.parse(await f.text()); }
       catch { return aviso("El archivo no tiene formato JSON válido. No se ha modificado ninguna información.", "Archivo no válido"); }
-      const r = validarRespaldo(obj);
-      if (!r.ok) return aviso(`El archivo no supera la validación y <strong>no se ha modificado ninguna información</strong>:<ul>${r.errores.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`, "Borradores no válidos");
-      const n = r.datos;
-      const idsT = new Set(S.datos.tramites.map((x) => x.id));
-      const idsS = new Set(S.datos.supuestos.map((x) => x.id));
-      const nuevosT = n.tramites.filter((t) => !idsT.has(t.id));
-      const nuevosS = n.supuestos.filter((s) => !idsS.has(s.id));
-      const omitidos = (n.tramites.length - nuevosT.length) + (n.supuestos.length - nuevosS.length);
-      if (!nuevosT.length && !nuevosS.length) return aviso("Todo el contenido de este archivo ya existe en la aplicación. No se ha modificado nada.", "Sin novedades");
-      const ok = await confirmar(`
-        <p>Se agregarán <strong>${nuevosT.length} ${nuevosT.length === 1 ? "trámite" : "trámites"}</strong> y <strong>${nuevosS.length} ${nuevosS.length === 1 ? "supuesto" : "supuestos"}</strong>, todos con el estado «Borrador pendiente de aprobación».</p>
-        ${nuevosS.length ? `<ul>${nuevosS.map((s) => `<li>${esc(s.nombre)}</li>`).join("")}</ul>` : ""}
-        ${omitidos ? `<p>${omitidos} ${omitidos === 1 ? "elemento ya existe y se deja" : "elementos ya existen y se dejan"} sin cambios.</p>` : ""}
-        <p>No se elimina ni se sustituye nada de lo que ya tiene.</p>`,
-        { boton: "Agregar borradores", titulo: "Importar borradores" });
-      if (!ok) return;
-      if (!S.online) return aviso("Se perdió la conexión. No se ha modificado ninguna información.");
-      const espera = dialogo(`<div class="dlg-cuerpo"><p>Agregando borradores…</p><div class="cargando"></div></div>`);
-      espera.dataset.ocupado = "1";
-      let agregados = 0, saltados = 0;
-      try {
-        for (const t of nuevosT) {
-          try { await S.backend.guardar("tramites", t.id, t, null); agregados++; }
-          catch (e) { if (e.code === "conflicto") saltados++; else throw e; }
-        }
-        for (const s of nuevosS) {
-          try { await S.backend.guardar("supuestos", s.id, { ...s, estadoRevision: "borrador" }, null); agregados++; }
-          catch (e) { if (e.code === "conflicto") saltados++; else throw e; }
-        }
-        delete espera.dataset.ocupado; espera.close();
-        await aviso(`Se agregaron ${agregados} elementos.${saltados ? ` ${saltados} ya existían y no se modificaron.` : ""}`, "Borradores agregados");
-      } catch (e) {
-        delete espera.dataset.ocupado; espera.close();
-        console.error(e);
-        await aviso(`La importación se interrumpió después de agregar ${agregados} elementos. Puede volver a importar el mismo archivo: lo ya agregado no se duplicará.`, "Importación incompleta");
-      }
+      await procesarBorradores(obj);
     };
     input.click();
+  },
+
+  "pegar-borradores"() {
+    formulario({
+      titulo: "Pegar borradores",
+      campos: [{ nombre: "texto", etiqueta: "Pegue aquí el texto completo de los borradores", tipo: "textarea", filas: 10, requerido: true,
+        ayuda: "Copie todo el texto que le envió Claude (empieza por { y termina por }) y péguelo aquí." }],
+      guardar: "Continuar",
+      alGuardar: async (v) => {
+        let obj;
+        try { obj = JSON.parse(v.texto.trim()); }
+        catch { return { error: "El texto no es válido. Asegúrese de copiarlo completo, desde la primera { hasta la última }." }; }
+        setTimeout(() => procesarBorradores(obj), 0);
+      }
+    });
   },
 
   importar() {
@@ -964,6 +945,46 @@ const ACCIONES = {
     input.click();
   }
 };
+
+async function procesarBorradores(obj) {
+      const r = validarRespaldo(obj);
+  if (!r.ok) return aviso(`El archivo no supera la validación y <strong>no se ha modificado ninguna información</strong>:<ul>${r.errores.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`, "Borradores no válidos");
+  const n = r.datos;
+  const idsT = new Set(S.datos.tramites.map((x) => x.id));
+  const idsS = new Set(S.datos.supuestos.map((x) => x.id));
+  const nuevosT = n.tramites.filter((t) => !idsT.has(t.id));
+  const nuevosS = n.supuestos.filter((s) => !idsS.has(s.id));
+  const omitidos = (n.tramites.length - nuevosT.length) + (n.supuestos.length - nuevosS.length);
+  if (!nuevosT.length && !nuevosS.length) return aviso("Todo el contenido de este archivo ya existe en la aplicación. No se ha modificado nada.", "Sin novedades");
+  const ok = await confirmar(`
+    <p>Se agregarán <strong>${nuevosT.length} ${nuevosT.length === 1 ? "trámite" : "trámites"}</strong> y <strong>${nuevosS.length} ${nuevosS.length === 1 ? "supuesto" : "supuestos"}</strong>, todos con el estado «Borrador pendiente de aprobación».</p>
+    ${nuevosS.length ? `<ul>${nuevosS.map((s) => `<li>${esc(s.nombre)}</li>`).join("")}</ul>` : ""}
+    ${omitidos ? `<p>${omitidos} ${omitidos === 1 ? "elemento ya existe y se deja" : "elementos ya existen y se dejan"} sin cambios.</p>` : ""}
+    <p>No se elimina ni se sustituye nada de lo que ya tiene.</p>`,
+    { boton: "Agregar borradores", titulo: "Importar borradores" });
+  if (!ok) return;
+  if (!S.online) return aviso("Se perdió la conexión. No se ha modificado ninguna información.");
+  const espera = dialogo(`<div class="dlg-cuerpo"><p>Agregando borradores…</p><div class="cargando"></div></div>`);
+  espera.dataset.ocupado = "1";
+  let agregados = 0, saltados = 0;
+  try {
+    for (const t of nuevosT) {
+      try { await S.backend.guardar("tramites", t.id, t, null); agregados++; }
+      catch (e) { if (e.code === "conflicto") saltados++; else throw e; }
+    }
+    for (const s of nuevosS) {
+      try { await S.backend.guardar("supuestos", s.id, { ...s, estadoRevision: "borrador" }, null); agregados++; }
+      catch (e) { if (e.code === "conflicto") saltados++; else throw e; }
+    }
+    delete espera.dataset.ocupado; espera.close();
+    await aviso(`Se agregaron ${agregados} elementos.${saltados ? ` ${saltados} ya existían y no se modificaron.` : ""}`, "Borradores agregados");
+  } catch (e) {
+    delete espera.dataset.ocupado; espera.close();
+    console.error(e);
+    await aviso(`La importación se interrumpió después de agregar ${agregados} elementos. Puede volver a importar el mismo archivo: lo ya agregado no se duplicará.`, "Importación incompleta");
+  }
+
+}
 
 async function moverGenerico(b, delta) {
   const { tipo } = b.dataset, i = Number(b.dataset.indice);
