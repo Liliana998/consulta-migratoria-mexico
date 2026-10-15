@@ -257,3 +257,10 @@ ul.items .item { padding-left: 1rem; }
 .campo textarea { resize: vertical; }
 .campo input:focus, .campo textarea:focus, .campo select:focus { outline: none; border-color: var(--sello); box-shadow: 0 0 0 3px var(--sello-claro); }
 .ayuda { margin: .3rem 0 0; font-size: .84rem; color: var(--tinta-suave); }
+
+.btn-mover {
+  display: inline-flex; align-items: center; gap: .3em; min-height: 40px; padding: 0 .7em; margin-right: .2rem;
+  border: 1px solid var(--linea); border-radius: 99px; background: var(--superficie); color: var(--sello);
+  font-size: .85rem; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.btn-mover svg { width: 18px; height: 18px; }

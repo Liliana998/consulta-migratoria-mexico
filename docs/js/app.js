@@ -167,10 +167,15 @@ async function modificarSupuesto(s, mutar) {
 }
 
 async function reordenar(coleccion, lista, indice, delta) {
-  const j = indice + delta;
-  if (j < 0 || j >= lista.length) return;
+  return colocar(coleccion, lista, indice, indice + delta);
+}
+
+// Coloca el elemento de la posición «desde» en la posición «hasta» (índices desde 0) y renumera.
+async function colocar(coleccion, lista, desde, hasta) {
+  if (hasta < 0 || hasta >= lista.length || hasta === desde) return;
   const nueva = [...lista];
-  [nueva[indice], nueva[j]] = [nueva[j], nueva[indice]];
+  const [el] = nueva.splice(desde, 1);
+  nueva.splice(hasta, 0, el);
   try {
     for (let k = 0; k < nueva.length; k++) {
       if ((nueva[k].orden ?? 0) !== k + 1) await S.backend.guardar(coleccion, nueva[k].id, { ...nueva[k], orden: k + 1 }, nueva[k].version ?? 0);
@@ -208,7 +213,8 @@ function icono(n) {
     editar: '<path d="M4 20h4L19 9l-4-4L4 16v4z" />',
     borrar: '<path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13" />',
     mas: '<path d="M12 5v14M5 12h14" />',
-    buscar: '<circle cx="11" cy="11" r="6" /><path d="M20 20l-4.5-4.5" />'
+    buscar: '<circle cx="11" cy="11" r="6" /><path d="M20 20l-4.5-4.5" />',
+    mover: '<path d="M12 4v16M8 8l4-4 4 4M8 16l4 4 4-4" />'
   }[n];
   return `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
 }
@@ -216,6 +222,7 @@ function icono(n) {
 function controlesFila(datos) {
   if (!puedeEditar()) return "";
   return `<div class="ctrl-fila">
+    <button class="btn-mover" data-accion="mover-a" ${datos} aria-label="Mover a una posición">${icono("mover")} Mover a…</button>
     <button class="btn-icono" data-accion="subir" ${datos} aria-label="Subir">${icono("arriba")}</button>
     <button class="btn-icono" data-accion="bajar" ${datos} aria-label="Bajar">${icono("abajo")}</button>
     <button class="btn-icono" data-accion="editar" ${datos} aria-label="Modificar">${icono("editar")}</button>
@@ -558,6 +565,7 @@ function vistaHonorarios() {
           <td>${esc(h.procedimiento)}</td>
           <td class="num">${h.importe === null || h.importe === undefined ? `<span class="tenue">Sin definir</span>` : esc(fmtImporte(h.importe, "MXN"))}</td>
           ${puedeEditar() ? `<td class="acciones-celda"><div class="acciones-h">
+            <button class="btn-icono" data-accion="mover-a" data-tipo="honorario" data-indice="${i}" aria-label="Mover a una posición">${icono("mover")}</button>
             <button class="btn-icono" data-accion="editar" data-tipo="honorario" data-indice="${i}" aria-label="Modificar">${icono("editar")}</button>
             <button class="btn-icono peligro" data-accion="borrar" data-tipo="honorario" data-indice="${i}" aria-label="Eliminar">${icono("borrar")}</button>
           </div></td>` : ""}
@@ -819,6 +827,28 @@ const ACCIONES = {
     formHonorario(null);
   },
 
+  "mover-a"(b) {
+    const { tipo } = b.dataset, i = Number(b.dataset.indice);
+    let lista, nombre, mover;
+    if (tipo === "tramite") { lista = tramites(); nombre = (x) => x.nombre; mover = (h) => colocar("tramites", lista, i, h); }
+    else if (tipo === "supuesto") { lista = supuestosDe(b.dataset.tramite); nombre = (x) => x.nombre; mover = (h) => colocar("supuestos", lista, i, h); }
+    else if (tipo === "honorario") { lista = honorarios(); nombre = (x) => x.procedimiento; mover = (h) => colocar("honorarios", lista, i, h); }
+    else {
+      const s = supuesto(b.dataset.id); lista = s[tipo]; nombre = (x) => x.texto || x.concepto;
+      mover = (h) => modificarSupuesto(s, (c) => { const [el] = c[tipo].splice(i, 1); c[tipo].splice(h, 0, el); });
+    }
+    if (lista.length < 2) return aviso("No hay otras posiciones a las que mover este elemento.");
+    const corto = (t) => { t = String(t || ""); return t.length > 45 ? t.slice(0, 45) + "…" : t; };
+    const opciones = {};
+    lista.forEach((x, k) => { opciones[String(k + 1)] = `${k + 1}${k === i ? " (posición actual)" : " · ahora: " + corto(nombre(x))}`; });
+    formulario({
+      titulo: `Mover «${corto(nombre(lista[i]))}»`,
+      campos: [{ nombre: "pos", etiqueta: "Nueva posición", tipo: "select", opciones, valor: String(i + 1),
+        ayuda: "El elemento se coloca en la posición elegida y los demás se desplazan." }],
+      guardar: "Mover",
+      alGuardar: async (v) => { const h = Number(v.pos) - 1; if (h !== i) await mover(h); }
+    });
+  },
   async subir(b) { await moverGenerico(b, -1); },
   async bajar(b) { await moverGenerico(b, 1); },
 
